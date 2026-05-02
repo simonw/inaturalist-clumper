@@ -23,6 +23,7 @@ def _raw_observation(**overrides):
                 "license_code": "cc-by-nc",
                 "url": "https://inaturalist-open-data.s3.amazonaws.com/photos/308290899/square.jpg",
                 "attribution": "(c) Simon Willison, some rights reserved (CC BY-NC)",
+                "original_dimensions": {"width": 2048, "height": 1365},
             }
         ],
     }
@@ -55,6 +56,7 @@ def test_normalize_extracts_core_fields():
                 "thumbnail_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/308290899/medium.jpg",
                 "large_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/308290899/large.jpg",
                 "original_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/308290899/original.jpg",
+                "original_dimensions": {"width": 2048, "height": 1365},
                 "attribution": "(c) Simon Willison, some rights reserved (CC BY-NC)",
                 "license_code": "cc-by-nc",
             }
@@ -78,6 +80,33 @@ def test_photo_urls_swap_square_for_medium_large_original_on_static_host():
     assert photo["thumbnail_url"] == "https://static.inaturalist.org/photos/107527504/medium.jpeg"
     assert photo["large_url"] == "https://static.inaturalist.org/photos/107527504/large.jpeg"
     assert photo["original_url"] == "https://static.inaturalist.org/photos/107527504/original.jpeg"
+
+
+def test_photo_original_dimensions_preserved():
+    raw = _raw_observation(
+        photos=[
+            {
+                "id": 1,
+                "url": "https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.jpg",
+                "original_dimensions": {"width": 1600, "height": 1200},
+            }
+        ]
+    )
+    record = normalize(raw, user_login="simonw")
+    assert record["photos"][0]["original_dimensions"] == {"width": 1600, "height": 1200}
+
+
+def test_photo_original_dimensions_defaults_to_none_when_missing():
+    raw = _raw_observation(
+        photos=[
+            {
+                "id": 1,
+                "url": "https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.jpg",
+            }
+        ]
+    )
+    record = normalize(raw, user_login="simonw")
+    assert record["photos"][0]["original_dimensions"] is None
 
 
 def test_normalize_skips_when_time_missing():

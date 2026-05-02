@@ -19,6 +19,7 @@ def _normalize_photo(photo: dict[str, Any]) -> dict[str, Any]:
         "thumbnail_url": _photo_url(url, "medium"),
         "large_url": _photo_url(url, "large"),
         "original_url": _photo_url(url, "original"),
+        "original_dimensions": photo.get("original_dimensions"),
         "attribution": photo.get("attribution"),
         "license_code": photo.get("license_code"),
     }
