@@ -60,7 +60,7 @@ def test_first_run_writes_clumps_json(httpx_mock, tmp_path):
     assert data["clumps"][0]["observations"][0]["user_login"] == "simonw"
 
 
-def test_second_run_only_fetches_above_existing_max_id(httpx_mock, tmp_path):
+def test_second_run_uses_updated_since_from_generated_at(httpx_mock, tmp_path):
     output = tmp_path / "out.json"
     seed = {
         "generated_at": "2026-05-01T00:00:00Z",
@@ -105,7 +105,7 @@ def test_second_run_only_fetches_above_existing_max_id(httpx_mock, tmp_path):
     main(["simonw", "--output", str(output)])
 
     request = httpx_mock.get_requests()[0]
-    assert request.url.params["id_above"] == "500"
+    assert request.url.params["updated_since"] == "2026-05-01T00:00:00Z"
     assert request.url.params["user_login"] == "simonw"
 
     # Existing observation should still be in the output
@@ -114,11 +114,75 @@ def test_second_run_only_fetches_above_existing_max_id(httpx_mock, tmp_path):
     assert data["clumps"][0]["observations"][0]["id"] == 500
 
 
-def test_full_refresh_ignores_existing_max_id(httpx_mock, tmp_path):
+def test_edited_observation_is_replaced_on_second_run(httpx_mock, tmp_path):
+    output = tmp_path / "out.json"
+    seed = {
+        "generated_at": "2026-05-01T00:00:00Z",
+        "users": ["simonw"],
+        "params": {"max_distance_km": 5.0, "max_hours": 3.0},
+        "total_observations": 1,
+        "skipped_no_time_or_location": 0,
+        "total_clumps": 1,
+        "clumps": [
+            {
+                "id": 1,
+                "started_at": "2025-01-01T10:00:00+00:00",
+                "ended_at": "2025-01-01T10:00:00+00:00",
+                "duration_hours": 0.0,
+                "centroid": [37.0, -122.0],
+                "bbox": [[37.0, -122.0], [37.0, -122.0]],
+                "span_km": 0.0,
+                "observation_count": 1,
+                "species": [],
+                "observations": [
+                    {
+                        "id": 500,
+                        "uri": "https://www.inaturalist.org/observations/500",
+                        "user_login": "simonw",
+                        "observed_at": "2025-01-01T10:00:00+00:00",
+                        "latitude": 37.0,
+                        "longitude": -122.0,
+                        "positional_accuracy_m": 5,
+                        "obscured": False,
+                        "geoprivacy": None,
+                        "taxon": None,
+                        "species_guess": "Old Guess",
+                        "photos": [],
+                    }
+                ],
+            }
+        ],
+    }
+    output.write_text(json.dumps(seed))
+    # Server returns the same observation with an edited species_guess
+    edited = _raw_observation(500, "2025-01-01T10:00:00+00:00")
+    edited["species_guess"] = "Corrected Guess"
+    httpx_mock.add_response(json={"results": [edited]})
+
+    main(["simonw", "--output", str(output)])
+
+    data = json.loads(output.read_text())
+    assert data["total_observations"] == 1
+    assert data["clumps"][0]["observations"][0]["id"] == 500
+    assert data["clumps"][0]["observations"][0]["species_guess"] == "Corrected Guess"
+
+
+def test_first_run_does_not_use_updated_since(httpx_mock, tmp_path):
+    httpx_mock.add_response(json={"results": []})
+    output = tmp_path / "out.json"
+
+    main(["simonw", "--output", str(output)])
+
+    request = httpx_mock.get_requests()[0]
+    assert "updated_since" not in request.url.params
+
+
+def test_full_refresh_ignores_existing_state(httpx_mock, tmp_path):
     output = tmp_path / "out.json"
     output.write_text(
         json.dumps(
             {
+                "generated_at": "2026-05-01T00:00:00Z",
                 "clumps": [
                     {
                         "observations": [
@@ -131,7 +195,7 @@ def test_full_refresh_ignores_existing_max_id(httpx_mock, tmp_path):
                             }
                         ]
                     }
-                ]
+                ],
             }
         )
     )
@@ -141,14 +205,16 @@ def test_full_refresh_ignores_existing_max_id(httpx_mock, tmp_path):
 
     request = httpx_mock.get_requests()[0]
     assert request.url.params["id_above"] == "0"
+    assert "updated_since" not in request.url.params
     # Existing observation should be discarded
     data = json.loads(output.read_text())
     assert data["total_observations"] == 0
 
 
-def test_multiple_users_each_get_own_id_above(httpx_mock, tmp_path):
+def test_multiple_users_share_updated_since(httpx_mock, tmp_path):
     output = tmp_path / "out.json"
     seed = {
+        "generated_at": "2026-04-01T00:00:00Z",
         "clumps": [
             {
                 "observations": [
@@ -168,7 +234,7 @@ def test_multiple_users_each_get_own_id_above(httpx_mock, tmp_path):
                     },
                 ]
             }
-        ]
+        ],
     }
     output.write_text(json.dumps(seed))
     httpx_mock.add_response(json={"results": []})  # simon583
@@ -178,9 +244,12 @@ def test_multiple_users_each_get_own_id_above(httpx_mock, tmp_path):
 
     requests = httpx_mock.get_requests()
     by_login = {
-        r.url.params["user_login"]: r.url.params["id_above"] for r in requests
+        r.url.params["user_login"]: r.url.params["updated_since"] for r in requests
     }
-    assert by_login == {"simon583": "10", "simonw": "500"}
+    assert by_login == {
+        "simon583": "2026-04-01T00:00:00Z",
+        "simonw": "2026-04-01T00:00:00Z",
+    }
 
 
 def test_distance_and_hours_flags_are_respected(httpx_mock, tmp_path):

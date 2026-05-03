@@ -16,9 +16,11 @@ def fetch_user_observations(
     login: str,
     *,
     id_above: int = 0,
+    updated_since: str | None = None,
     sleep_seconds: float = 1.0,
 ) -> list[dict[str, Any]]:
-    """Fetch all observations for one user, optionally only those above a given id.
+    """Fetch all observations for one user, optionally only those above a given id
+    or updated after a given timestamp.
 
     Pages by id_above to stay compatible with iNaturalist's recommended
     cursor-style pagination. Sleeps between requests to stay under their
@@ -29,13 +31,15 @@ def fetch_user_observations(
     headers = {"User-Agent": USER_AGENT}
     with httpx.Client(headers=headers, timeout=30.0) as client:
         while True:
-            params = {
+            params: dict[str, Any] = {
                 "user_login": login,
                 "per_page": PER_PAGE,
                 "order_by": "id",
                 "order": "asc",
                 "id_above": cursor,
             }
+            if updated_since is not None:
+                params["updated_since"] = updated_since
             response = client.get(BASE_URL, params=params)
             response.raise_for_status()
             page = response.json().get("results", [])

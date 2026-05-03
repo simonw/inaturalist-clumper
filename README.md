@@ -42,11 +42,12 @@ Options:
 ### Incremental runs
 
 A second invocation against the same `--output` file reads the existing
-data, finds the highest observation id already recorded for each requested
-user, and asks the iNaturalist API only for newer observations (using the
-`id_above` parameter). The full set is then re-clumped and the file
-rewritten — so a new sighting that bridges two previous clumps will merge
-them.
+data and asks the iNaturalist API for any observations that have been
+created or edited since the previous run's `generated_at` timestamp
+(using the `updated_since` parameter). Edited records overwrite the
+cached copy on merge, so corrected taxa, new photos, or fixed coordinates
+flow back in. The full set is then re-clumped and the file rewritten —
+so a new sighting that bridges two previous clumps will merge them.
 
 Use `--full-refresh` to ignore the existing file and start over.
 
