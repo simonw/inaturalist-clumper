@@ -13,7 +13,6 @@ from .normalize import normalize
 from .store import (
     extract_observations,
     load_existing,
-    max_id_by_user,
     merge_observations,
     write_output,
 )
@@ -58,26 +57,21 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     output_path = Path(args.output)
 
-    if args.full_refresh:
-        existing_observations: list[dict] = []
-        max_ids: dict[str, int] = {}
-    else:
+    existing_observations: list[dict] = []
+    updated_since: str | None = None
+    if not args.full_refresh:
         state = load_existing(output_path)
-        if state is None:
-            existing_observations = []
-            max_ids = {}
-        else:
+        if state is not None:
             existing_observations = extract_observations(state)
-            max_ids = max_id_by_user(existing_observations)
+            updated_since = state.get("generated_at")
 
     fresh: list[dict] = []
     skipped = 0
     for login in args.logins:
-        id_above = max_ids.get(login, 0)
         existing_count = sum(1 for o in existing_observations if o.get("user_login") == login)
-        raw = fetch_user_observations(login, id_above=id_above)
+        raw = fetch_user_observations(login, updated_since=updated_since)
         print(
-            f"Fetched {len(raw)} new observations for {login} (existing: {existing_count})",
+            f"Fetched {len(raw)} observations for {login} (existing: {existing_count})",
             file=sys.stderr,
         )
         for obs in raw:

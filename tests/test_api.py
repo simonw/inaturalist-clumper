@@ -55,3 +55,39 @@ def test_fetch_targets_correct_endpoint(httpx_mock):
     fetch_user_observations("simonw", sleep_seconds=0)
     url = httpx_mock.get_requests()[0].url
     assert str(url).startswith(BASE_URL)
+
+
+def test_fetch_passes_updated_since_when_provided(httpx_mock):
+    httpx_mock.add_response(json={"results": []})
+    fetch_user_observations(
+        "simonw",
+        updated_since="2026-05-01T00:00:00Z",
+        sleep_seconds=0,
+    )
+    request = httpx_mock.get_requests()[0]
+    assert request.url.params["updated_since"] == "2026-05-01T00:00:00Z"
+
+
+def test_fetch_omits_updated_since_when_not_provided(httpx_mock):
+    httpx_mock.add_response(json={"results": []})
+    fetch_user_observations("simonw", sleep_seconds=0)
+    request = httpx_mock.get_requests()[0]
+    assert "updated_since" not in request.url.params
+
+
+def test_fetch_keeps_updated_since_across_pages(httpx_mock):
+    page1 = [{"id": i} for i in range(1, 201)]
+    page2 = [{"id": 201}]
+    httpx_mock.add_response(json={"results": page1})
+    httpx_mock.add_response(json={"results": page2})
+
+    fetch_user_observations(
+        "simonw",
+        updated_since="2026-05-01T00:00:00Z",
+        sleep_seconds=0,
+    )
+
+    requests = httpx_mock.get_requests()
+    assert len(requests) == 2
+    assert requests[0].url.params["updated_since"] == "2026-05-01T00:00:00Z"
+    assert requests[1].url.params["updated_since"] == "2026-05-01T00:00:00Z"
