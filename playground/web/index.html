@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redis Array Playground</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>Redis Array Playground</h1>
+    <p class="tagline">
+      Try the new <code>AR*</code> commands from the
+      <a href="https://github.com/antirez/redis/tree/array" target="_blank" rel="noopener">antirez:array</a>
+      branch, in your browser.
+    </p>
+  </div>
+  <nav class="links">
+    <a href="https://github.com/redis/redis/pull/15162" target="_blank" rel="noopener">
+      PR #15162
+    </a>
+    <a href="https://antirez.com/news/164" target="_blank" rel="noopener">
+      antirez.com/news/164
+    </a>
+  </nav>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <div class="status">
+      <span class="dot" id="wasm-status-dot"></span>
+      <span id="wasm-status">loading…</span>
+    </div>
+    <h2>Commands</h2>
+    <ul id="command-list" class="command-list"></ul>
+    <div class="sidebar-foot">
+      <p>
+        Backed by a real WebAssembly build of antirez's
+        <code>sparsearray.c</code>. Command-level logic runs in JS on top of
+        the WASM data structure.
+      </p>
+    </div>
+  </aside>
+
+  <section class="main">
+    <article class="docs" id="docs">
+      <h2 id="docs-title">Pick a command</h2>
+      <p id="docs-summary">Choose any <code>AR*</code> command from the left to see its docs and a form for trying it out.</p>
+    </article>
+
+    <article class="form-panel" id="form-panel" hidden>
+      <h3>Arguments</h3>
+      <form id="cmd-form" autocomplete="off"></form>
+      <div class="form-actions">
+        <button type="button" id="run-btn" class="primary">Run</button>
+        <button type="button" id="clear-btn">Clear</button>
+        <code class="preview" id="cmd-preview"></code>
+      </div>
+    </article>
+
+    <article class="output-panel">
+      <div class="output-head">
+        <h3>Output</h3>
+        <button type="button" id="reset-db">Reset DB</button>
+      </div>
+      <pre id="output" class="output"></pre>
+    </article>
+
+    <article class="state-panel">
+      <h3>Keys</h3>
+      <div id="state-view" class="state-view">
+        <em>(no keys yet — try <code>ARSET myarr 0 hello world</code>)</em>
+      </div>
+    </article>
+  </section>
+</main>
+
+<footer class="bottom">
+  Sparse-array WASM size: <span id="wasm-size">…</span> ·
+  <a href="https://github.com/redis/redis/pull/15162" target="_blank" rel="noopener">PR #15162</a> ·
+  <a href="https://antirez.com/news/164" target="_blank" rel="noopener">antirez's blog post</a>
+</footer>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
