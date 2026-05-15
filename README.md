@@ -1,5 +1,11 @@
 # inaturalist-clumper
 
+[![GitHub repo](https://img.shields.io/badge/github-repo-green)](https://github.com/simonw/inaturalist-clumper)
+[![PyPI](https://img.shields.io/pypi/v/inaturalist-clumper.svg)](https://pypi.org/project/inaturalist-clumper/)
+[![Changelog](https://img.shields.io/github/v/release/simonw/inaturalist-clumper?include_prereleases&label=changelog)](https://inaturalist-clumper.datasette.io/en/stable/changelog.html)
+[![Tests](https://github.com/simonw/inaturalist-clumper/workflows/Test/badge.svg)](https://github.com/simonw/inaturalist-clumper/actions?query=workflow%3ATest)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/simonw/inaturalist-clumper/blob/main/LICENSE)
+
 Group iNaturalist sightings into clumps, represented as JSON.
 
 Given one or more iNaturalist user logins, this CLI fetches every public observation those users have recorded and groups sightings that happened **within ~5 km and ~3 hours of each other** into "clumps" — useful for reconstructing a single hike, birding session, or tide-pool visit as one record.
