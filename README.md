@@ -4,6 +4,8 @@ Group iNaturalist sightings into clumps, represented as JSON.
 
 Given one or more iNaturalist user logins, this CLI fetches every public observation those users have recorded and groups sightings that happened **within ~5 km and ~3 hours of each other** into "clumps" — useful for reconstructing a single hike, birding session, or tide-pool visit as one record.
 
+See [simonw/inaturalist-clumps/blob/main/clumps.json](https://github.com/simonw/inaturalist-clumps/blob/main/clumps.json) for example output from this tool.
+
 The output JSON file records, for every clump:
 
 - start/end timestamps, duration, centroid, bounding box, span
