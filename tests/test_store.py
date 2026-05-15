@@ -2,9 +2,11 @@ import json
 
 from inaturalist_clumper.store import (
     extract_observations,
+    extract_places_cache,
     load_existing,
     max_id_by_user,
     merge_observations,
+    prune_places_to_breadcrumbs,
     write_output,
 )
 
@@ -95,6 +97,7 @@ def test_write_then_load_roundtrip(tmp_path):
         total_observations=2,
         skipped_no_time_or_location=1,
         clumps=[{"id": 1, "started_at": "2025-01-01T10:00:00+00:00", "observations": []}],
+        places={"12": {"name": "X", "display_name": "X", "ancestor_ids": []}},
     )
     loaded = load_existing(path)
     assert loaded["users"] == ["simonw"]
@@ -104,3 +107,54 @@ def test_write_then_load_roundtrip(tmp_path):
     assert loaded["total_clumps"] == 1
     assert "generated_at" in loaded
     assert loaded["clumps"][0]["id"] == 1
+    assert loaded["places"] == {"12": {"name": "X", "display_name": "X", "ancestor_ids": []}}
+
+
+def test_write_omits_places_when_empty(tmp_path):
+    path = tmp_path / "out.json"
+    write_output(
+        path,
+        users=["simonw"],
+        params={"max_distance_km": 5.0, "max_hours": 3.0},
+        total_observations=0,
+        skipped_no_time_or_location=0,
+        clumps=[],
+        places={},
+    )
+    loaded = load_existing(path)
+    assert "places" not in loaded
+
+
+def test_extract_places_cache_returns_int_keyed_dict():
+    state = {
+        "places": {
+            "12": {"name": "County", "display_name": "County, US", "ancestor_ids": [1, 11]},
+            "1": {"name": "US", "display_name": "US", "ancestor_ids": []},
+        }
+    }
+    cache = extract_places_cache(state)
+    assert cache == {
+        12: {"name": "County", "display_name": "County, US", "ancestor_ids": [1, 11]},
+        1: {"name": "US", "display_name": "US", "ancestor_ids": []},
+    }
+
+
+def test_extract_places_cache_missing_returns_empty_dict():
+    assert extract_places_cache({}) == {}
+
+
+def test_prune_places_to_breadcrumbs_keeps_only_referenced():
+    cache = {
+        12: {"name": "County", "ancestor_ids": [1, 11]},
+        11: {"name": "State", "ancestor_ids": [1]},
+        1: {"name": "US", "ancestor_ids": []},
+        999: {"name": "Unused", "ancestor_ids": []},
+    }
+    clumps = [
+        {"location": {"breadcrumb": [12, 11, 1]}},
+        {"location": {"breadcrumb": None}},
+        {"location": {"place_guess": "x"}},  # no breadcrumb key
+        {},  # no location at all
+    ]
+    pruned = prune_places_to_breadcrumbs(cache, clumps)
+    assert set(pruned) == {12, 11, 1}

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
-from typing import Any
+from typing import Any, Mapping
 
 EARTH_RADIUS_KM = 6371.0
 
@@ -43,7 +43,87 @@ def _round(x: float, ndigits: int = 6) -> float:
     return round(x, ndigits)
 
 
-def _build_clump_metadata(observations: list[dict[str, Any]]) -> dict[str, Any]:
+def _mode_place_guess(observations: list[dict[str, Any]]) -> str | None:
+    """Pick the most common non-empty place_guess among eligible observations.
+
+    Eligible = not obscured and no geoprivacy set, so we don't promote a leaked
+    private location. Ties broken by the most recent observation.
+    """
+    eligible = [
+        o for o in observations
+        if not o.get("obscured") and not o.get("geoprivacy") and o.get("place_guess")
+    ]
+    if not eligible:
+        return None
+    counts: Counter[str] = Counter()
+    latest: dict[str, str] = {}
+    for o in eligible:
+        guess = o["place_guess"]
+        counts[guess] += 1
+        latest[guess] = max(latest.get(guess, ""), o["observed_at"])
+    return max(counts, key=lambda g: (counts[g], latest[g]))
+
+
+def _most_specific_shared_place(
+    observations: list[dict[str, Any]],
+    places_lookup: Mapping[int, Mapping[str, Any]],
+) -> int | None:
+    """Intersect place_ids across observations and return the deepest in the hierarchy."""
+    place_id_sets = [set(o.get("place_ids") or []) for o in observations]
+    if not place_id_sets or not all(place_id_sets):
+        return None
+    shared = set.intersection(*place_id_sets)
+    if not shared:
+        return None
+    # Pick the place whose ancestor_ids ⊇ (shared \ {self}) — the deepest in the chain.
+    candidates = []
+    for pid in shared:
+        info = places_lookup.get(pid)
+        if not info:
+            continue
+        ancestors = set(info.get("ancestor_ids") or [])
+        if shared - {pid} <= ancestors:
+            candidates.append(pid)
+    if not candidates:
+        # Fallback: longest ancestor list among those we know about.
+        known = [pid for pid in shared if pid in places_lookup]
+        if not known:
+            return None
+        return max(known, key=lambda pid: (len(places_lookup[pid].get("ancestor_ids") or []), -pid))
+    return max(candidates, key=lambda pid: (len(places_lookup[pid].get("ancestor_ids") or []), -pid))
+
+
+def _build_location(
+    observations: list[dict[str, Any]],
+    places_lookup: Mapping[int, Mapping[str, Any]] | None,
+) -> dict[str, Any] | None:
+    place_guess = _mode_place_guess(observations)
+    place_id: int | None = None
+    display_name: str | None = None
+    breadcrumb: list[int] | None = None
+
+    if places_lookup is not None:
+        place_id = _most_specific_shared_place(observations, places_lookup)
+        if place_id is not None:
+            info = places_lookup[place_id]
+            display_name = info.get("display_name")
+            breadcrumb = [place_id, *reversed(info.get("ancestor_ids") or [])]
+
+    if place_guess is None and place_id is None:
+        return None
+
+    location: dict[str, Any] = {"place_guess": place_guess}
+    if places_lookup is not None:
+        location["place_id"] = place_id
+        location["display_name"] = display_name
+        location["breadcrumb"] = breadcrumb
+    return location
+
+
+def _build_clump_metadata(
+    observations: list[dict[str, Any]],
+    places_lookup: Mapping[int, Mapping[str, Any]] | None,
+) -> dict[str, Any]:
     obs_sorted = sorted(observations, key=lambda o: o["observed_at"])
     started = obs_sorted[0]["observed_at"]
     ended = obs_sorted[-1]["observed_at"]
@@ -68,7 +148,7 @@ def _build_clump_metadata(observations: list[dict[str, Any]]) -> dict[str, Any]:
         for (sci, com), n in counter.most_common()
     ]
 
-    return {
+    metadata: dict[str, Any] = {
         "started_at": started,
         "ended_at": ended,
         "duration_hours": round(duration_hours, 4),
@@ -79,6 +159,10 @@ def _build_clump_metadata(observations: list[dict[str, Any]]) -> dict[str, Any]:
         "species": species,
         "observations": obs_sorted,
     }
+    location = _build_location(obs_sorted, places_lookup)
+    if location is not None:
+        metadata["location"] = location
+    return metadata
 
 
 def build_clumps(
@@ -86,6 +170,7 @@ def build_clumps(
     *,
     max_distance_km: float,
     max_hours: float,
+    places_lookup: Mapping[int, Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Cluster observations by single-link in space + time."""
     n = len(observations)
@@ -109,7 +194,7 @@ def build_clumps(
     for i, obs in enumerate(observations):
         groups.setdefault(uf.find(i), []).append(obs)
 
-    clumps = [_build_clump_metadata(group) for group in groups.values()]
+    clumps = [_build_clump_metadata(group, places_lookup) for group in groups.values()]
     clumps.sort(key=lambda c: c["started_at"])
     for c in clumps:
         c["id"] = min(o["id"] for o in c["observations"])

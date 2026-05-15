@@ -10,10 +10,13 @@ from typing import Sequence
 from .api import fetch_user_observations
 from .clump import build_clumps
 from .normalize import normalize
+from .places import fetch_places
 from .store import (
     extract_observations,
+    extract_places_cache,
     load_existing,
     merge_observations,
+    prune_places_to_breadcrumbs,
     write_output,
 )
 
@@ -58,11 +61,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     output_path = Path(args.output)
 
     existing_observations: list[dict] = []
+    places_cache: dict[int, dict] = {}
     updated_since: str | None = None
     if not args.full_refresh:
         state = load_existing(output_path)
         if state is not None:
             existing_observations = extract_observations(state)
+            places_cache = extract_places_cache(state)
             updated_since = state.get("generated_at")
 
     fresh: list[dict] = []
@@ -88,11 +93,23 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
 
     all_observations = merge_observations(existing_observations, fresh)
+
+    needed_place_ids = {pid for obs in all_observations for pid in (obs.get("place_ids") or [])}
+    missing_place_ids = sorted(needed_place_ids - set(places_cache))
+    if missing_place_ids:
+        print(
+            f"Fetching {len(missing_place_ids)} place(s) from iNaturalist",
+            file=sys.stderr,
+        )
+        places_cache.update(fetch_places(missing_place_ids))
+
     clumps = build_clumps(
         all_observations,
         max_distance_km=args.distance_km,
         max_hours=args.hours,
+        places_lookup=places_cache or None,
     )
+    pruned_places = prune_places_to_breadcrumbs(places_cache, clumps)
 
     write_output(
         output_path,
@@ -101,6 +118,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         total_observations=len(all_observations),
         skipped_no_time_or_location=skipped,
         clumps=clumps,
+        places=pruned_places,
     )
     print(
         f"Wrote {len(clumps)} clumps spanning {len(all_observations)} observations to {output_path}",

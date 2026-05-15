@@ -43,6 +43,8 @@ def test_normalize_extracts_core_fields():
         "positional_accuracy_m": 2,
         "obscured": False,
         "geoprivacy": None,
+        "place_guess": None,
+        "place_ids": [],
         "taxon": {
             "id": 4940,
             "scientific_name": "Egretta thula",
@@ -130,3 +132,26 @@ def test_observation_with_no_photos():
     raw = _raw_observation(photos=[])
     record = normalize(raw, user_login="simonw")
     assert record["photos"] == []
+
+
+def test_normalize_passes_through_place_guess_and_place_ids():
+    raw = _raw_observation(
+        place_guess="Pescadero State Beach",
+        place_ids=[97394, 12, 11, 1],
+    )
+    record = normalize(raw, user_login="simonw")
+    assert record["place_guess"] == "Pescadero State Beach"
+    assert record["place_ids"] == [97394, 12, 11, 1]
+
+
+def test_normalize_place_ids_defaults_to_empty_list_when_missing():
+    raw = _raw_observation()
+    raw.pop("place_ids", None)
+    record = normalize(raw, user_login="simonw")
+    assert record["place_ids"] == []
+
+
+def test_normalize_place_ids_treats_null_as_empty_list():
+    raw = _raw_observation(place_ids=None)
+    record = normalize(raw, user_login="simonw")
+    assert record["place_ids"] == []
