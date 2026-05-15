@@ -55,6 +55,8 @@ def normalize(obs: dict[str, Any], *, user_login: str) -> dict[str, Any] | None:
         "positional_accuracy_m": obs.get("positional_accuracy"),
         "obscured": obs.get("obscured", False),
         "geoprivacy": obs.get("geoprivacy"),
+        "place_guess": obs.get("place_guess"),
+        "place_ids": list(obs.get("place_ids") or []),
         "taxon": _normalize_taxon(obs.get("taxon")),
         "species_guess": obs.get("species_guess"),
         "photos": [_normalize_photo(p) for p in obs.get("photos", [])],

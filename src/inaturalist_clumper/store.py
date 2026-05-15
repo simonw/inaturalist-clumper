@@ -41,6 +41,23 @@ def merge_observations(
     return list(by_id.values())
 
 
+def extract_places_cache(state: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    """Pull the places cache out of a loaded state, with int keys."""
+    return {int(pid): info for pid, info in (state.get("places") or {}).items()}
+
+
+def prune_places_to_breadcrumbs(
+    cache: dict[int, dict[str, Any]],
+    clumps: list[dict[str, Any]],
+) -> dict[int, dict[str, Any]]:
+    """Return a copy of the places cache containing only ids that appear in some clump's breadcrumb."""
+    referenced: set[int] = set()
+    for clump in clumps:
+        breadcrumb = (clump.get("location") or {}).get("breadcrumb") or []
+        referenced.update(breadcrumb)
+    return {pid: cache[pid] for pid in referenced if pid in cache}
+
+
 def write_output(
     path: Path,
     *,
@@ -49,9 +66,10 @@ def write_output(
     total_observations: int,
     skipped_no_time_or_location: int,
     clumps: list[dict[str, Any]],
+    places: dict[str, Any] | dict[int, Any] | None = None,
 ) -> None:
     """Write the JSON output file."""
-    payload = {
+    payload: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "users": users,
         "params": params,
@@ -60,4 +78,6 @@ def write_output(
         "total_clumps": len(clumps),
         "clumps": clumps,
     }
+    if places:
+        payload["places"] = {str(pid): info for pid, info in places.items()}
     path.write_text(json.dumps(payload, indent=2))

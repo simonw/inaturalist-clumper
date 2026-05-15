@@ -12,8 +12,18 @@ The output JSON file records, for every clump:
 
 - start/end timestamps, duration, centroid, bounding box, span
 - a species roll-up
-- per-observation: timestamp, latitude/longitude, identified taxon, and
-  photo URLs (thumbnail / large / original)
+- a `location` block: the mode of the observations' `place_guess` plus
+  the most-specific iNaturalist place that every observation in the
+  clump falls inside (with a `breadcrumb` of ancestor place IDs)
+- per-observation: timestamp, latitude/longitude, identified taxon,
+  user-typed `place_guess`, iNat `place_ids`, and photo URLs
+  (thumbnail / large / original)
+
+A top-level `places` dictionary caches the iNat place metadata
+(`name`, `display_name`, `admin_level`, `ancestor_ids`) for every ID
+that appears in a clump's `breadcrumb`, so the file is self-contained.
+Incremental runs reuse this cache and only fetch newly-referenced
+places.
 
 ## Install
 
