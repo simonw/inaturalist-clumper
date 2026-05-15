@@ -111,6 +111,6 @@ def build_clumps(
 
     clumps = [_build_clump_metadata(group) for group in groups.values()]
     clumps.sort(key=lambda c: c["started_at"])
-    for n, c in enumerate(clumps, start=1):
-        c["id"] = n
+    for c in clumps:
+        c["id"] = min(o["id"] for o in c["observations"])
     return [{"id": c.pop("id"), **c} for c in clumps]

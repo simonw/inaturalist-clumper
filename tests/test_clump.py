@@ -105,6 +105,15 @@ def test_clump_metadata_started_ended_centroid_bbox_species_rollup():
     assert [o["id"] for o in clump["observations"]] == [1, 3, 2]
 
 
+def test_clump_id_is_min_observation_id():
+    a = _obs(987, "2025-01-01T10:00:00+00:00", 37.0, -122.0)
+    b = _obs(123, "2025-01-01T11:00:00+00:00", 37.001, -122.001)
+    c = _obs(456, "2025-01-01T12:00:00+00:00", 37.002, -122.002)
+    clumps = build_clumps([a, b, c], max_distance_km=5.0, max_hours=3.0)
+    assert len(clumps) == 1
+    assert clumps[0]["id"] == 123
+
+
 def test_clumps_sorted_by_started_at():
     later = _obs(1, "2025-06-01T10:00:00+00:00", 37.0, -122.0)
     earlier = _obs(2, "2025-01-01T10:00:00+00:00", 38.0, -123.0)
@@ -113,5 +122,5 @@ def test_clumps_sorted_by_started_at():
         "2025-01-01T10:00:00+00:00",
         "2025-06-01T10:00:00+00:00",
     ]
-    assert clumps[0]["id"] == 1
-    assert clumps[1]["id"] == 2
+    assert clumps[0]["id"] == 2
+    assert clumps[1]["id"] == 1
