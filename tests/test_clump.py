@@ -1,4 +1,4 @@
-from inaturalist_clumper.clump import build_clumps, haversine_km
+from inaturalist_clumper.clump import build_clumps, clump_distance_km, haversine_km
 
 
 def _obs(
@@ -79,6 +79,46 @@ def test_chain_links_via_intermediate_single_link():
     clumps = build_clumps([a, b, c], max_distance_km=4.0, max_hours=3.0)
     assert len(clumps) == 1
     assert clumps[0]["observation_count"] == 3
+
+
+def test_obscured_observations_in_same_cell_form_one_clump():
+    # Real-world case: three obscured sightings from one outing, scattered
+    # 10+ km apart by iNaturalist's coordinate obscuring.
+    a = _obs(1, "2026-11-15T11:56:32-08:00", 37.1464804033, -122.38059808, obscured=True)
+    b = _obs(2, "2026-11-15T12:15:29-08:00", 37.1085300104, -122.2775037124, obscured=True)
+    c = _obs(3, "2026-11-15T12:33:51-08:00", 37.0285440781, -122.309035353, obscured=True)
+    clumps = build_clumps([a, b, c], max_distance_km=5.0, max_hours=3.0)
+    assert len(clumps) == 1
+    assert clumps[0]["observation_count"] == 3
+
+
+def test_obscured_observation_clumps_with_precise_one_in_its_cell():
+    a = _obs(1, "2025-01-01T10:00:00+00:00", 37.19, -122.39, obscured=True)
+    b = _obs(2, "2025-01-01T10:30:00+00:00", 37.01, -122.21)  # ~25 km away, same cell
+    assert clump_distance_km(a, b) == 0.0
+    assert len(build_clumps([a, b], max_distance_km=5.0, max_hours=3.0)) == 1
+
+
+def test_obscured_observations_still_split_by_time():
+    a = _obs(1, "2025-01-01T10:00:00+00:00", 37.1, -122.3, obscured=True)
+    b = _obs(2, "2025-01-01T14:00:00+00:00", 37.1, -122.3, obscured=True)
+    assert len(build_clumps([a, b], max_distance_km=5.0, max_hours=3.0)) == 2
+
+
+def test_obscured_observations_far_apart_form_two_clumps():
+    a = _obs(1, "2025-01-01T10:00:00+00:00", 37.1, -122.3, obscured=True)
+    b = _obs(2, "2025-01-01T10:30:00+00:00", 34.05, -118.25, obscured=True)
+    c = _obs(3, "2025-01-01T10:40:00+00:00", 38.5, -122.3)
+    assert len(build_clumps([a, b, c], max_distance_km=5.0, max_hours=3.0)) == 3
+
+
+def test_obscured_distance_measured_from_edge_of_cell():
+    a = _obs(1, "2025-01-01T10:00:00+00:00", 37.1, -122.3, obscured=True)  # cell 37.0-37.2
+    near = _obs(2, "2025-01-01T10:30:00+00:00", 37.22, -122.3)  # ~2.2 km north of cell
+    far = _obs(3, "2025-01-01T10:30:00+00:00", 37.3, -122.3)  # ~11 km north of cell
+    assert 2.0 < clump_distance_km(a, near) < 2.5
+    assert 10.5 < clump_distance_km(a, far) < 11.5
+    assert clump_distance_km(near, a) == clump_distance_km(a, near)
 
 
 def test_singleton_observation_yields_singleton_clump():

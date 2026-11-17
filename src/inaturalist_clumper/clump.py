@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
-from math import asin, cos, radians, sin, sqrt
+from math import asin, cos, floor, radians, sin, sqrt
 from typing import Any, Mapping
 
 EARTH_RADIUS_KM = 6371.0
+
+# iNaturalist obscures a location by replacing it with a random point inside
+# the 0.2 x 0.2 degree grid cell that contains the true coordinates.
+OBSCURED_CELLS_PER_DEGREE = 5
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -17,6 +21,45 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dlon = radians(lon2 - lon1)
     a = sin(dlat / 2) ** 2 + cos(rlat1) * cos(rlat2) * sin(dlon / 2) ** 2
     return 2 * EARTH_RADIUS_KM * asin(sqrt(a))
+
+
+def _axis_range(value: float, obscured: bool) -> tuple[float, float]:
+    """The range of values the true coordinate could have on one axis."""
+    if not obscured:
+        return (value, value)
+    low = floor(value * OBSCURED_CELLS_PER_DEGREE)
+    return (low / OBSCURED_CELLS_PER_DEGREE, (low + 1) / OBSCURED_CELLS_PER_DEGREE)
+
+
+def _closest(a: tuple[float, float], b: tuple[float, float]) -> tuple[float, float]:
+    """The closest pair of values from two ranges - identical if they overlap."""
+    if a[1] < b[0]:
+        return (a[1], b[0])
+    if b[1] < a[0]:
+        return (a[0], b[1])
+    shared = max(a[0], b[0])
+    return (shared, shared)
+
+
+def clump_distance_km(a: Mapping[str, Any], b: Mapping[str, Any]) -> float:
+    """Distance between two observations for the purpose of clumping.
+
+    The published coordinates of an obscured observation are a random point in
+    its 0.2 degree grid cell, so they say nothing about where in that cell it
+    really was. An obscured observation is therefore assumed to be in the same
+    location as the other observation whenever that is possible: the distance
+    is measured from the nearest point of its cell, and is zero if the other
+    observation is inside that cell (or is obscured to the same cell).
+    """
+    lat_a, lat_b = _closest(
+        _axis_range(a["latitude"], bool(a.get("obscured"))),
+        _axis_range(b["latitude"], bool(b.get("obscured"))),
+    )
+    lon_a, lon_b = _closest(
+        _axis_range(a["longitude"], bool(a.get("obscured"))),
+        _axis_range(b["longitude"], bool(b.get("obscured"))),
+    )
+    return haversine_km(lat_a, lon_a, lat_b, lon_b)
 
 
 class _UnionFind:
@@ -183,10 +226,7 @@ def build_clumps(
         for j in range(i + 1, n):
             if abs((parsed[j] - parsed[i]).total_seconds()) > max_seconds:
                 continue
-            d = haversine_km(
-                observations[i]["latitude"], observations[i]["longitude"],
-                observations[j]["latitude"], observations[j]["longitude"],
-            )
+            d = clump_distance_km(observations[i], observations[j])
             if d <= max_distance_km:
                 uf.union(i, j)
 
